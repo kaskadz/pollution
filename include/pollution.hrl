@@ -16,7 +16,8 @@
 -type coords() :: {float(), float()}.
 -type timestamp() :: calendar:datetime().
 -type m_type() :: string().
--type measurement() :: {m_type(), timestamp(), float()}.
+-type measurement() :: {timestamp(), m_type(), float()}.
+-type identifier() :: {name, station_name()} | {coords, coords()}.
 
 
 -record(station, {
