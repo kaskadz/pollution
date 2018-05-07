@@ -12,7 +12,7 @@
 -include("../include/pollution.hrl").
 
 %% API
--export([createMonitor/0, addStation/3, addValue/5, removeValue/4, getOneValue/4, getStationMean/3, getDailyMean/3, getCorrelation/3]).
+-export([createMonitor/0, addStation/3, addValue/5, removeValue/4, getOneValue/4, getStationMean/3, getDailyMean/3, getCorrelation/3, getStation/2]).
 
 %% ====================
 %% Public API functions
@@ -75,7 +75,7 @@ getOneValue(Identifier, Type, Timestamp, Monitor) ->
   case getStation(Identifier, Monitor) of
     {ok, #station{measurements = Ms}} ->
       RefMeasurement = createMeasurement(Timestamp, Type),
-      case lists:filter(Ms, fun(X) -> measurementEquals(X, RefMeasurement) end) of
+      case lists:filter(fun(X) -> measurementEquals(X, RefMeasurement) end, Ms) of
         [Measurement] -> Measurement;
         [] -> {error, not_fonud}
       end;
@@ -125,19 +125,44 @@ getDailyMean(Date, Type, #monitor{stations = S}) ->
 
 -spec getCorrelation(m_type(), m_type(), monitor()) ->
   float() | not_available.
-getCorrelation(Type1, Type2, #monitor{stations = S} = Monitor) ->
-  T1Measurements = fetchMeasurementsOfOneType(Type1, Monitor),
-  T2Measurements = fetchMeasurementsOfOneType(Type2, Monitor),
-  Avg1 = mean(T1Measurements),
-  Avg2 = mean(T2Measurements),
-  erlang:error(not_implemented).
+getCorrelation(Type1, Type2, #monitor{} = Monitor) ->
+  T1Measurements = lists:sort(fun({Ts1, _}, {Ts2, _}) -> Ts1 =< Ts2 end, fetchMeasurementsOfOneType(Type1, Monitor)),
+  T2Measurements = lists:sort(fun({Ts1, _}, {Ts2, _}) -> Ts1 =< Ts2 end, fetchMeasurementsOfOneType(Type2, Monitor)),
+  Merged = mergeMeasurements(T1Measurements, T2Measurements),
+  T1Reduced = lists:map(fun({X, _}) -> X end, Merged),
+  T2Reduced = lists:map(fun({_, X}) -> X end, Merged),
+  T1Mean = mean(T1Reduced),
+  T2Mean = mean(T2Reduced),
+  T1StdDev = stdDev(T1Reduced),
+  T2StdDev = stdDev(T2Reduced),
+  lists:sum(lists:map(fun({X, Y}) ->
+    ((X - T1Mean) / T1StdDev) * ((Y - T2Mean) / T2StdDev) end, Merged)) / length(Merged).
+
 
 %% ===================
 %% Auxiliary functions
 %% ===================
 
-%%mergeMeasurements([{Ts1, V1} | T1], [{Ts2, V2} | T2]) ->
+stdDev([]) ->
+  0;
+stdDev(L) when is_list(L) ->
+  Mean = mean(L),
+  math:sqrt(lists:sum(lists:map(fun(X) -> math:pow(X - Mean, 2) end, L)) / length(L)).
 
+mergeMeasurements([], []) ->
+  [];
+mergeMeasurements([], _) ->
+  [];
+mergeMeasurements(_, []) ->
+  [];
+mergeMeasurements([H1 | T1], [H2 | T2]) ->
+  {Ts1, V1} = H1,
+  {Ts2, V2} = H2,
+  if
+    Ts1 == Ts2 -> [{V1, V2} | mergeMeasurements(T1, T2)];
+    Ts1 < Ts2 -> mergeMeasurements(T1, [H2 | T2]);
+    Ts1 > Ts2 -> mergeMeasurements([H1 | T1], T2)
+  end.
 
 fetchMeasurementsOfOneType(Type, #monitor{stations = S}) ->
   Stations = maps:values(S),
@@ -170,13 +195,13 @@ stationExists(Name, Coordinates, Monitor) ->
 -spec getStation(id(), monitor()) ->
   {ok, station()} | {error, not_found}.
 getStation({name, Name}, #monitor{stations = S}) ->
-  case maps:get(Name, S, none) of
-    none -> {error, not_found};
-    #station{} = S -> {ok, S}
+  case maps:get(Name, S, undefined) of
+    undefined -> {error, not_found};
+    Station -> {ok, Station}
   end;
 getStation({coords, Coordinates}, #monitor{coords_to_station_name = CtSn} = M) ->
-  case maps:get(Coordinates, CtSn, none) of
-    none -> {error, not_found};
+  case maps:get(Coordinates, CtSn, undefined) of
+    undefined -> {error, not_found};
     Name -> getStation({name, Name}, M)
   end.
 
@@ -184,10 +209,10 @@ getStation({coords, Coordinates}, #monitor{coords_to_station_name = CtSn} = M) -
   boolean().
 measurementExists(RefMeasurement, Measurements) ->
   lists:any(
-    Measurements,
     fun(X) ->
       measurementEquals(X, RefMeasurement)
-    end
+    end,
+    Measurements
   ).
 
 -spec updateStation(station(), monitor()) ->
