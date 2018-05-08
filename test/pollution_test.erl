@@ -46,6 +46,14 @@ addStation_duplication_test() ->
     ?_assertMatch({error, _}, pollution:addStation(?S_NAME1, ?S_COORDS1, M2))
   ].
 
+getStation_test() ->
+  M1 = pollution:createMonitor(),
+  M2 = pollution:addStation(?S_NAME1, ?S_COORDS1, M1),
+  [
+    ?_assertEqual(#station{name = ?S_NAME1, coordinates = ?S_COORDS1, measurements = []}, pollution:getStation({name, ?S_NAME1}, M2)),
+    ?_assertEqual(#station{name = ?S_NAME1, coordinates = ?S_COORDS1, measurements = []}, pollution:getStation({coords, ?S_COORDS2}, M2))
+  ].
+
 addValue_test_() ->
   M1 = pollution:createMonitor(),
   M2 = pollution:addStation(?S_NAME1, ?S_COORDS1, M1),
@@ -53,20 +61,20 @@ addValue_test_() ->
   MbyCoords = pollution:addValue({coords, ?S_COORDS1}, ?TIMESTAMP1, ?M_TYPE1, ?VALUE1, M2),
   [
     {
-      "adding value by name doesn't work",
+      "adding value by name",
       ?_assertMatch(#monitor{}, MbyName)
     },
     {
-      "adding value by coords doesn't work",
+      "adding value by coords",
       ?_assertMatch(#monitor{}, MbyCoords)
     },
     {
-      "adding value by name and by coords doesn't give same results",
+      "adding value by name and by coords",
       ?_assertEqual(MbyCoords, MbyName)
     },
     {
-      "value added by addValue cannot by found",
-      ?_assertEqual(?MEASUREMENT1, pollution:getOneValue({name, ?S_NAME1}, ?TIMESTAMP1, ?M_TYPE1, MbyName))
+      "finding value added by addValue",
+      ?_assertEqual(?MEASUREMENT1, pollution:getOneValue({name, ?S_NAME1}, ?M_TYPE1, ?TIMESTAMP1, MbyName))
     },
     {
       "addValue allows adding duplicated measurements",
@@ -77,4 +85,6 @@ addValue_test_() ->
       ?_assertEqual({error, not_found}, pollution:addValue({name, ?S_COORDS2}, ?TIMESTAMP1, ?M_TYPE1, ?VALUE1, MbyCoords))
     }
   ].
+
+%%removeValue_test() ->
 
