@@ -59,10 +59,10 @@ removeValue(Identifier, Timestamp, Type, Monitor) ->
     {ok, #station{measurements = Ms} = S} ->
       RefMeasurement = createMeasurement(Timestamp, Type),
       Measurements = lists:filter(
-        Ms,
         fun(X) ->
           not measurementEquals(X, RefMeasurement)
-        end
+        end,
+        Ms
       ),
       updateStation(S#station{measurements = Measurements}, Monitor);
     {error, _} = Error ->
